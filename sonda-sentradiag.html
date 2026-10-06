@@ -1,0 +1,983 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0F14">
+<title>SentraDiag Sonda</title>
+<style>
+  :root {
+    --bg: #0B0F14; --surface: #141B24; --surface-2: #1B2533; --border: #243042;
+    --text: #E6EDF3; --muted: #8B98A9; --primary: #3B9EFF;
+    --ok: #2FBF71; --warn: #F2A93B; --danger: #E5484D; --code: #070A0E;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 0 16px 48px; }
+  header { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center;
+    gap: 12px; padding: 14px 0; background: var(--bg); border-bottom: 1px solid var(--border); }
+  header .brand { font-weight: 700; letter-spacing: .2px; }
+  header .brand span { color: var(--muted); font-weight: 500; }
+  .chip { font-size: .8rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+  .chip.on { color: var(--ok); border-color: var(--ok); }
+  .chip.busy { color: var(--warn); border-color: var(--warn); }
+  .intro { color: var(--muted); margin: 14px 0 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin-top: 14px; }
+  .card.alert { border-color: var(--danger); }
+  h2 { font-size: 1.05rem; margin: 0 0 6px; }
+  p { margin: 6px 0; }
+  .muted { color: var(--muted); }
+  .small { font-size: .88rem; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  button { min-height: 48px; padding: 0 18px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+  button.primary { background: var(--primary); border-color: var(--primary); color: #06121F; }
+  button.danger { border-color: var(--danger); color: var(--danger); }
+  button.mini { min-height: 40px; padding: 0 12px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  details { margin-top: 8px; }
+  summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; color: var(--primary); }
+  ol { padding-left: 20px; margin: 6px 0; }
+  ol li { margin: 4px 0; }
+  select, input[type=text] { min-height: 48px; background: var(--code); color: var(--text); border: 1px solid var(--border);
+    border-radius: 12px; padding: 0 12px; font: 15px ui-monospace, Menlo, Consolas, monospace; }
+  input[type=text] { flex: 1; min-width: 0; text-transform: uppercase; }
+  .check { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; cursor: pointer; }
+  .check input { width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--primary); flex: none; }
+  .steps { list-style: none; margin: 12px 0 0; padding: 0; }
+  .steps li { display: grid; grid-template-columns: 28px 1fr; gap: 8px; padding: 9px 0; border-top: 1px solid var(--border); }
+  .steps .icon { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: .8rem; font-weight: 700;
+    background: var(--surface-2); color: var(--muted); }
+  .steps .label { font-weight: 600; }
+  .steps .detail { color: var(--muted); font-size: .88rem; word-break: break-word; font-variant-numeric: tabular-nums; }
+  .st-ok .icon { background: var(--ok); color: #04150C; }
+  .st-fail .icon { background: var(--danger); color: #1A0405; }
+  .st-warn .icon { background: var(--warn); color: #1A1003; }
+  .st-running .icon { background: var(--primary); color: #06121F; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  @media (prefers-reduced-motion: reduce) { .st-running .icon { animation: none; } }
+  .note { margin-top: 12px; padding: 10px 12px; border-radius: 10px; border-left: 4px solid var(--primary); background: var(--surface-2); }
+  .note-ok { border-left-color: var(--ok); }
+  .note-fail { border-left-color: var(--danger); }
+  .note-warn { border-left-color: var(--warn); }
+  .verdict { border-left: 4px solid var(--primary); }
+  .verdict.v-ok { border-left-color: var(--ok); }
+  .verdict.v-warn { border-left-color: var(--warn); }
+  .verdict.v-fail { border-left-color: var(--danger); }
+  pre#log { margin: 12px 0 0; max-height: 340px; overflow: auto; background: var(--code); border: 1px solid var(--border);
+    border-radius: 10px; padding: 10px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
+  footer { margin-top: 20px; text-align: center; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--border);
+    padding: 10px 16px; border-radius: 10px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand">SentraDiag <span>· Sonda de conexión</span></div>
+    <span id="chip" class="chip" role="status">Desconectado</span>
+  </header>
+  <p class="intro">Prueba, en modo <strong>solo lectura</strong>, todas las formas de hablar con la ECU de tu Sentra. No borra códigos ni cambia nada en el carro.</p>
+
+  <section id="unsupported" class="card alert" hidden>
+    <h2>Este navegador no puede conectarse</h2>
+    <p id="unsupportedMsg"></p>
+  </section>
+
+  <section class="card">
+    <h2>1. Conectar el adaptador</h2>
+    <details>
+      <summary>Antes de empezar</summary>
+      <ol>
+        <li>Empareja el adaptador en <strong>Ajustes → Bluetooth</strong> del teléfono (PIN 1234 o 0000). Aparece como "OBDII".</li>
+        <li>Conéctalo al puerto de diagnóstico del carro.</li>
+        <li>Usa <strong>Chrome</strong> (en Android, versión 137 o superior). En la laptop sirve Chrome o Edge.</li>
+        <li>Al presionar Conectar, elige "OBDII" en la lista.</li>
+      </ol>
+    </details>
+    <div class="row">
+      <button id="btnConnect" class="primary">Conectar</button>
+      <button id="btnReconnect" hidden>Usar el último</button>
+      <button id="btnDisconnect" hidden>Desconectar</button>
+    </div>
+    <details>
+      <summary>Velocidad del puerto (solo cable USB)</summary>
+      <div class="row">
+        <select id="baud" aria-label="Velocidad del puerto">
+          <option value="38400" selected>38400</option>
+          <option value="9600">9600</option>
+          <option value="115200">115200</option>
+          <option value="10400">10400</option>
+        </select>
+      </div>
+      <p class="muted small">Con Bluetooth este valor no importa.</p>
+    </details>
+    <p id="connMsg" class="muted small" aria-live="polite"></p>
+  </section>
+
+  <section class="card">
+    <h2>2. Verificar el adaptador</h2>
+    <p class="muted small">Comprueba que sea un ELM327 capaz de Consult-II. Basta con que el adaptador tenga energía.</p>
+    <div class="row"><button id="btnAdapter" disabled>Verificar adaptador</button></div>
+    <ul id="adapterSteps" class="steps"></ul>
+    <div id="adapterVerdict" class="note" hidden></div>
+  </section>
+
+  <section class="card">
+    <h2>3. Buscar la ECU</h2>
+    <label class="check"><input type="checkbox" id="ignOn"><span>La llave está en <strong>ON</strong> (tablero encendido) y el motor apagado.</span></label>
+    <label class="check"><input type="checkbox" id="stopped"><span>El carro está detenido y con freno de mano.</span></label>
+    <label class="check"><input type="checkbox" id="runAll"><span>Probar todas las formas aunque una funcione <span class="muted">(más lento, más información)</span>.</span></label>
+    <div class="row">
+      <button id="btnEcu" class="primary" disabled>Buscar la ECU</button>
+      <button id="btnStop" class="danger" hidden>Detener</button>
+    </div>
+    <p id="ecuMsg" class="muted small" aria-live="polite"></p>
+    <ul id="ecuSteps" class="steps"></ul>
+  </section>
+
+  <section id="verdictCard" class="card verdict" hidden aria-live="polite">
+    <h2 id="verdictTitle"></h2>
+    <p id="verdictBody"></p>
+    <p class="muted small">Descarga el registro (abajo) y guárdalo en <code>docs/captures/</code> del proyecto.</p>
+  </section>
+
+  <section class="card">
+    <h2>Consola</h2>
+    <p class="muted small">Solo lectura: se bloquean borrado de códigos, pruebas activas, reprogramación y escrituras en la memoria del adaptador.</p>
+    <div class="row" id="quick">
+      <button class="mini" data-cmd="ATQQ" disabled>ATQQ</button>
+      <button class="mini" data-cmd="ATBD" disabled>ATBD</button>
+      <button class="mini" data-cmd="ATBI" disabled>ATBI</button>
+      <button class="mini" data-cmd="ATSW00" disabled>ATSW00</button>
+      <button class="mini" data-cmd="ATRV" disabled>ATRV</button>
+      <button class="mini" data-cmd="ATKW" disabled>ATKW</button>
+      <button class="mini" data-cmd="ATDP" disabled>ATDP</button>
+    </div>
+    <form id="consoleForm" class="row" autocomplete="off">
+      <input id="consoleInput" type="text" spellcheck="false" autocapitalize="characters" placeholder="Ej.: ATRV" aria-label="Comando">
+      <button type="submit" id="btnSend" disabled>Enviar</button>
+    </form>
+    <p id="consoleMsg" class="small" aria-live="polite"></p>
+  </section>
+
+  <section class="card">
+    <h2>Registro</h2>
+    <div class="row">
+      <button id="btnDownload">Descargar .txt</button>
+      <button id="btnCopy">Copiar</button>
+      <button id="btnClear">Limpiar</button>
+    </div>
+    <pre id="log" aria-label="Registro de comunicación"></pre>
+  </section>
+
+  <footer class="muted small">SentraDiag Sonda v0.1 · uso personal · solo lectura</footer>
+</main>
+<div id="toast" class="toast" role="status"></div>
+
+<script>
+/*
+ * SentraDiag Sonda — núcleo sin dependencias de plataforma.
+ * Funciona igual en el navegador (Web Serial) y en Node (pruebas con adaptador simulado).
+ * SOLO LECTURA: inicia comunicación, TesterPresent (3E) e identificación (1A). Nada más.
+ */
+(function (root) {
+  'use strict';
+
+  const SPP_UUID = '00001101-0000-1000-8000-00805f9b34fb';
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function norm(s) {
+    return String(s).replace(/\s+/g, '').toUpperCase();
+  }
+
+  function splitLines(raw, cmd) {
+    return String(raw || '')
+      .split(/[\r\n]+/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .filter((l) => norm(l) !== norm(cmd));
+  }
+
+  /** Convierte una línea "81 FC 10 7E 0B" (o "81FC107E0B") en bytes; null si no es hex. */
+  function parseHexLine(line) {
+    const t = String(line).trim();
+    if (/^([0-9A-F]{2}\s+)*[0-9A-F]{2}$/i.test(t)) {
+      return t.split(/\s+/).map((x) => parseInt(x, 16));
+    }
+    if (/^([0-9A-F]{2}){2,}$/i.test(t)) {
+      return t.match(/../g).map((x) => parseInt(x, 16));
+    }
+    return null;
+  }
+
+  function hex(bytes) {
+    return (bytes || []).map((b) => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
+  }
+
+  function text(res) {
+    return res ? res.lines.join(' ') : '';
+  }
+
+  function isOk(res) {
+    return !!res && res.lines.some((l) => /\bOK\b/i.test(l));
+  }
+
+  function isQuestion(res) {
+    return !!res && res.lines.some((l) => l.trim() === '?');
+  }
+
+  /** ATBD: primer byte = cantidad de bytes válidos; luego hasta 12 bytes. */
+  function parseBd(res) {
+    if (!res || isOk(res) || isQuestion(res)) return null;
+    for (const l of res.lines) {
+      const b = parseHexLine(l);
+      if (b && b.length >= 2) {
+        const count = Math.min(b[0], b.length - 1);
+        return { count, data: b.slice(1, 1 + count), all: b };
+      }
+    }
+    return null;
+  }
+
+  /** ATKW: "1:D5 2:8F" → bytes; "1:-- 2:--" u "OK" → null. */
+  function parseKw(res) {
+    if (!res) return null;
+    const m = text(res).match(/1:\s*([0-9A-F]{2})\s*2:\s*([0-9A-F]{2})/i);
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16)] : null;
+  }
+
+  function frames(res) {
+    if (!res) return [];
+    return res.lines.map(parseHexLine).filter((b) => b && b.length >= 3);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cliente ELM327: una orden a la vez, espera el prompt '>', tolera basura.
+  // ---------------------------------------------------------------------------
+  class ElmClient {
+    constructor(transport, log) {
+      this.t = transport;
+      this.log = log || function () {};
+      this.buf = '';
+      this.waiter = null;
+      this.queue = Promise.resolve();
+      this.t.onData((chunk) => this._onData(chunk));
+    }
+
+    _onData(chunk) {
+      let s = '';
+      for (const b of chunk) {
+        // CR, LF, '>' y ASCII imprimible; se descartan bytes basura (0xFF, 0xFC…)
+        if (b === 0x0d || b === 0x0a || (b >= 0x20 && b <= 0x7e)) s += String.fromCharCode(b);
+      }
+      this.buf += s;
+      if (this.waiter && this.buf.includes('>')) {
+        const idx = this.buf.indexOf('>');
+        const raw = this.buf.slice(0, idx);
+        this.buf = this.buf.slice(idx + 1);
+        const w = this.waiter;
+        this.waiter = null;
+        clearTimeout(w.timer);
+        w.resolve(raw);
+      }
+    }
+
+    command(cmd, timeoutMs) {
+      const timeout = timeoutMs || 2500;
+      const run = async () => {
+        this.buf = '';
+        const started = Date.now();
+        this.log('tx', cmd);
+        const rawP = new Promise((resolve) => {
+          const timer = setTimeout(() => {
+            this.waiter = null;
+            resolve(null);
+          }, timeout);
+          this.waiter = { resolve, timer };
+        });
+        await this.t.write(new TextEncoder().encode(cmd + '\r'));
+        const raw = await rawP;
+        const durationMs = Date.now() - started;
+        if (raw === null) {
+          const partial = this.buf;
+          const lines = splitLines(partial, cmd);
+          this.log('rx', '(sin prompt en ' + timeout + ' ms)' + (lines.length ? ' ' + lines.join(' | ') : ''));
+          return { cmd, lines, timeout: true, durationMs };
+        }
+        const lines = splitLines(raw, cmd);
+        this.log('rx', lines.length ? lines.join(' | ') : '(vacío)');
+        return { cmd, lines, timeout: false, durationMs };
+      };
+      const p = this.queue.then(run, run);
+      this.queue = p.catch(() => {});
+      return p;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 1) Verificación del adaptador (por contenido, nunca por "OK")
+  // ---------------------------------------------------------------------------
+  async function checkAdapter(elm, onStep) {
+    const out = { steps: {} };
+    const step = async (key, label, cmd, timeout, evaluate) => {
+      onStep && onStep({ key, label, state: 'running' });
+      const res = await elm.command(cmd, timeout);
+      const ev = evaluate(res);
+      out.steps[key] = { label, cmd, state: ev.state, detail: ev.detail, response: text(res) };
+      onStep && onStep({ key, label, state: ev.state, detail: ev.detail });
+      return ev;
+    };
+
+    const reset = await step('reset', 'Reiniciar adaptador', 'ATZ', 4000, (r) =>
+      /ELM|STN|OBD/i.test(text(r))
+        ? { state: 'ok', detail: text(r) }
+        : { state: 'fail', detail: r.timeout ? 'No responde. ¿Es el adaptador correcto?' : text(r) || 'sin respuesta' }
+    );
+    if (reset.state === 'fail') {
+      out.verdict = 'sin-respuesta';
+      return out;
+    }
+    for (const c of ['ATE0', 'ATL0', 'ATS1', 'ATH1']) await elm.command(c);
+
+    await step('version', 'Versión declarada (ATI)', 'ATI', 2000, (r) => ({ state: 'info', detail: text(r) || '—' }));
+    out.version = out.steps.version.detail;
+    await step('desc', 'Descripción (AT@1)', 'AT@1', 2000, (r) => ({ state: 'info', detail: text(r) || '—' }));
+    await step('volt', 'Voltaje en el conector (ATRV)', 'ATRV', 2000, (r) => {
+      const m = text(r).match(/(\d+(?:\.\d+)?)\s*V/i);
+      if (!m) return { state: 'warn', detail: 'No se pudo leer: ' + (text(r) || '—') };
+      const v = parseFloat(m[1]);
+      out.volts = v;
+      if (v < 11.5) return { state: 'warn', detail: v.toFixed(1) + ' V — bajo; revisa batería y que la llave esté en ON' };
+      return { state: 'ok', detail: v.toFixed(1) + ' V' };
+    });
+    const qq = await step('qq', 'Rechaza comandos inventados (ATQQ → ?)', 'ATQQ', 2000, (r) =>
+      isQuestion(r)
+        ? { state: 'ok', detail: 'Responde "?" como un ELM327 real' }
+        : { state: 'fail', detail: 'Respondió "' + (text(r) || '—') + '": acepta todo sin implementarlo (clon limitado)' }
+    );
+    const bd = await step('bd', 'Búfer de depuración (ATBD → bytes hex)', 'ATBD', 2000, (r) => {
+      const b = parseBd(r);
+      return b
+        ? { state: 'ok', detail: 'Devuelve bytes: ' + text(r) }
+        : { state: 'fail', detail: 'Respondió "' + (text(r) || '—') + '" en vez de bytes hex' };
+    });
+    const bi = await step('bi', 'Omitir inicialización (ATBI)', 'ATBI', 2000, (r) =>
+      isOk(r) ? { state: 'ok', detail: 'OK' } : { state: 'fail', detail: text(r) || '—' }
+    );
+    const sw = await step('sw', 'Desactivar despertar automático (ATSW00)', 'ATSW00', 2000, (r) =>
+      isOk(r) ? { state: 'ok', detail: 'OK' } : { state: 'fail', detail: text(r) || '—' }
+    );
+    await step('cs', 'Contadores CAN (ATCS)', 'ATCS', 2000, (r) =>
+      /T:\s*[0-9A-F]{2}/i.test(text(r))
+        ? { state: 'ok', detail: text(r) }
+        : { state: 'warn', detail: 'Respuesta atípica: ' + (text(r) || '—') }
+    );
+    await step('stn', 'Chip STN (STI)', 'STI', 2000, (r) =>
+      !isQuestion(r) && !isOk(r) && text(r)
+        ? { state: 'ok', detail: 'Chip STN: ' + text(r) }
+        : { state: 'info', detail: 'No es STN (normal en un ELM327)' }
+    );
+    await elm.command('ATSW92'); // restaurar despertar automático por defecto
+
+    const capable = qq.state === 'ok' && bd.state === 'ok' && bi.state === 'ok' && sw.state === 'ok';
+    out.verdict = capable ? 'apto' : qq.state !== 'ok' || bd.state !== 'ok' ? 'clon-limitado' : 'dudoso';
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2) Búsqueda de la ECU: todas las formas de conexión, solo lectura
+  // ---------------------------------------------------------------------------
+  const STRATEGIES = [
+    { id: 'kwp-rapido-fisico', label: 'Consult-II · inicio rápido · físico (81 10 FC)', proto: '5', header: '8110FC', init: 'ATFI' },
+    { id: 'kwp-rapido-funcional', label: 'Consult-II · inicio rápido · funcional (C1 10 FC)', proto: '5', header: 'C110FC', init: 'ATFI' },
+    { id: 'kwp-rapido-tester-f1', label: 'KWP2000 · inicio rápido · tester F1 (81 10 F1)', proto: '5', header: '8110F1', init: 'ATFI' },
+    { id: 'kwp-rapido-tiempos-largos', label: 'Consult-II · inicio rápido · tiempos largos', proto: '5', header: '8110FC', init: 'ATFI', slow: true },
+    { id: 'kwp-lento-5baud', label: 'KWP2000 · inicio lento (5 baudios) → ECU 10', proto: '4', header: '8110FC', init: 'ATSI', iia: '10' },
+    { id: 'iso9141-lento-5baud', label: 'ISO 9141 · inicio lento (5 baudios) → ECU 10', proto: '3', header: null, init: 'ATSI', iia: '10' },
+    { id: 'obd2-generico', label: 'OBD2 genérico (búsqueda automática)', obd2: true },
+  ];
+
+  async function prepare(elm, s, pauseMs) {
+    await elm.command('ATPC', 2000);
+    await sleep(pauseMs); // tiempo de reposo de la línea K entre intentos
+    for (const c of ['ATE0', 'ATL0', 'ATS1', 'ATH1', 'ATAL']) await elm.command(c);
+    if (s.slow) {
+      await elm.command('ATAT0');
+      await elm.command('ATSTFF');
+    } else {
+      await elm.command('ATAT1');
+      await elm.command('ATST32');
+    }
+  }
+
+  async function runKwp(elm, s, pauseMs) {
+    await prepare(elm, s, pauseMs);
+    await elm.command('ATSP' + s.proto);
+    if (s.header) await elm.command('ATSH' + s.header);
+    if (s.iia) await elm.command('ATIIA' + s.iia);
+
+    const init = await elm.command(s.init, s.init === 'ATSI' ? 12000 : 8000);
+    const initText = text(init) || (init.timeout ? '(sin respuesta)' : '—');
+    if (isQuestion(init)) {
+      return { ok: false, kind: 'no-soportado', detail: 'El adaptador no soporta ' + s.init, initText };
+    }
+    const initOk = /OK/i.test(initText) && !/ERROR/i.test(initText);
+    const kw = parseKw(await elm.command('ATKW'));
+
+    if (!initOk) {
+      const bd = parseBd(await elm.command('ATBD'));
+      if (bd && bd.count > 0) {
+        return {
+          ok: false,
+          kind: 'respuesta-parcial',
+          detail: 'La inicialización falló, pero llegaron bytes: ' + hex(bd.data) + '. Posible encabezado de 1 byte.',
+          initText,
+          bd: hex(bd.data),
+        };
+      }
+      return { ok: false, kind: 'sin-respuesta', detail: initText, initText };
+    }
+
+    // Inicialización "OK": confirmar con respuestas reales (los clones malos dicen OK a todo)
+    if (s.proto === '3') {
+      return kw
+        ? { ok: true, confidence: 'media', kind: 'iso9141', detail: 'Inicialización OK con key bytes ' + hex(kw), initText, kw: hex(kw) }
+        : { ok: false, kind: 'dudoso', detail: 'El adaptador dijo OK pero no hay key bytes', initText };
+    }
+
+    const tp = await elm.command('3E', 3000);
+    const tpFrames = frames(tp);
+    const tpPos = tpFrames.some((f) => f[3] === 0x7e);
+    const tpNeg = tpFrames.some((f) => f[3] === 0x7f);
+    let tpBd = null;
+    if (!tpPos && !tpNeg) tpBd = parseBd(await elm.command('ATBD'));
+
+    const id = await elm.command('1A81', 3000);
+    const idFrames = frames(id);
+    const idPos = idFrames.find((f) => f[3] === 0x5a);
+    const idNeg = idFrames.find((f) => f[3] === 0x7f);
+
+    const result = {
+      initText,
+      kw: kw ? hex(kw) : null,
+      testerPresent: tpPos ? 'positiva (7E)' : tpNeg ? 'negativa (7F)' : text(tp) || '—',
+      identificacion: idPos ? hex(idPos) : idNeg ? 'negativa ' + hex(idNeg) : text(id) || '—',
+    };
+
+    if (tpPos || tpNeg || idPos || idNeg) {
+      return Object.assign({ ok: true, confidence: 'alta', kind: 'consult2-kwp', detail: 'La ECU responde con encabezado de 3 bytes.' }, result);
+    }
+    const oneByte = tpBd && tpBd.count > 0 && tpBd.data.indexOf(0x7e) !== -1;
+    if (oneByte) {
+      return Object.assign(
+        { ok: true, confidence: 'alta', kind: 'consult2-1byte', detail: 'La ECU responde con encabezado de 1 byte (bytes en ATBD: ' + hex(tpBd.data) + ').' },
+        result
+      );
+    }
+    if (kw) {
+      return Object.assign({ ok: true, confidence: 'media', kind: 'consult2-init', detail: 'Inicialización OK y key bytes ' + hex(kw) + ', pero sin respuesta a 3E/1A.' }, result);
+    }
+    return Object.assign({ ok: false, kind: 'dudoso', detail: 'El adaptador dijo OK, pero no hubo ninguna respuesta real de la ECU.' }, result);
+  }
+
+  async function runObd2(elm, s, pauseMs) {
+    await prepare(elm, s, pauseMs);
+    await elm.command('ATSP0');
+    const r = await elm.command('0100', 20000);
+    const t = text(r);
+    if (/41\s?00/i.test(t)) {
+      const dp = await elm.command('ATDP');
+      return { ok: true, confidence: 'alta', kind: 'obd2', detail: 'Responde OBD2 genérico por ' + text(dp), response: t };
+    }
+    return { ok: false, kind: 'sin-respuesta', detail: t || '(sin respuesta)', response: t };
+  }
+
+  async function probeEcu(elm, opts) {
+    const o = opts || {};
+    const results = [];
+    for (const s of STRATEGIES) {
+      if (o.shouldStop && o.shouldStop()) break;
+      o.onStep && o.onStep({ key: s.id, label: s.label, state: 'running' });
+      let r;
+      try {
+        const pause = typeof o.pauseMs === 'number' ? o.pauseMs : 1500;
+        r = s.obd2 ? await runObd2(elm, s, pause) : await runKwp(elm, s, pause);
+      } catch (e) {
+        r = { ok: false, kind: 'error', detail: String((e && e.message) || e) };
+      }
+      r.id = s.id;
+      r.label = s.label;
+      results.push(r);
+      o.onStep && o.onStep({ key: s.id, label: s.label, state: r.ok ? 'ok' : r.kind === 'respuesta-parcial' ? 'warn' : 'fail', detail: r.detail });
+      if (r.ok && r.confidence === 'alta' && !o.runAll) break;
+    }
+    await elm.command('ATPC', 2000);
+    return { results, verdict: summarize(results) };
+  }
+
+  function summarize(results) {
+    const strong = results.find((r) => r.ok && r.confidence === 'alta' && r.kind !== 'obd2');
+    if (strong) {
+      return {
+        code: strong.kind,
+        title: '¡Tu ECU responde por Consult-II (KWP2000) en la línea K!',
+        body:
+          'Estrategia que funcionó: ' + strong.label + '. ' + strong.detail +
+          ' Esto confirma el Camino A del plan: el teléfono puede hablar con tu carro por Bluetooth.',
+      };
+    }
+    const obd2 = results.find((r) => r.ok && r.kind === 'obd2');
+    const medium = results.find((r) => r.ok);
+    if (medium && medium !== obd2) {
+      return {
+        code: 'consult2-probable',
+        title: 'La ECU probablemente responde, pero falta confirmarlo',
+        body: 'Estrategia: ' + medium.label + '. ' + medium.detail + ' Repite la prueba con la llave en ON y guarda el registro.',
+      };
+    }
+    if (obd2) {
+      return { code: 'obd2', title: 'La ECU responde OBD2 genérico', body: obd2.detail + '. Es inesperado; guarda el registro para analizarlo.' };
+    }
+    const partial = results.find((r) => r.kind === 'respuesta-parcial');
+    if (partial) {
+      return {
+        code: 'respuesta-parcial',
+        title: 'La ECU contestó algo que el adaptador no supo interpretar',
+        body: partial.detail + ' Es una buena señal: hay vida en la línea K. Guarda el registro; la app completa usará el truco del encabezado de 1 byte.',
+      };
+    }
+    return {
+      code: 'sin-respuesta',
+      title: 'Ninguna forma de conexión obtuvo respuesta',
+      body:
+        'Revisa que la llave esté en ON (tablero encendido) y mide el pin 7 con el multímetro (sección 3.1 del plan). ' +
+        'Si el pin 7 no tiene ~12 V, la ECU no está en la línea K y ningún ELM327 puede hablarle (posible Consult-I).',
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3) Filtro de seguridad de la consola: solo lectura
+  // ---------------------------------------------------------------------------
+  const ALLOWED_SIDS = [0x01, 0x02, 0x03, 0x07, 0x09, 0x1a, 0x21, 0x22, 0x3e, 0x81, 0x82];
+
+  function checkConsoleCommand(input) {
+    const c = String(input || '').trim();
+    if (!c) return { allowed: false, reason: 'Comando vacío' };
+    const up = c.toUpperCase().replace(/\s+/g, '');
+
+    if (up.startsWith('AT')) {
+      if (/^AT(PP|CV|SD|WM|MA|MR|MT|BRD|BRT)/.test(up)) {
+        return { allowed: false, reason: 'Bloqueado en la sonda: escribe en la memoria del adaptador, cambia la velocidad del enlace o deja el adaptador en modo monitor.' };
+      }
+      const sh = up.match(/^ATSH([0-9A-F]+)$/);
+      if (sh) {
+        if (sh[1].length !== 6) return { allowed: false, reason: 'En la sonda solo se permiten encabezados de 3 bytes (6 dígitos hex).' };
+        const b0 = parseInt(sh[1].slice(0, 2), 16);
+        if ((b0 & 0xc0) === 0) {
+          return { allowed: false, reason: 'Encabezado sin direcciones (truco de 1 byte): se usa en la app completa, no en la consola de la sonda.' };
+        }
+      }
+      return { allowed: true, normalized: up };
+    }
+    if (up === 'STI' || up === 'STDI') return { allowed: true, normalized: up };
+    if (up.startsWith('ST')) return { allowed: false, reason: 'Comandos STN bloqueados salvo STI y STDI.' };
+
+    if (/^([0-9A-F]{2})+$/.test(up)) {
+      const sid = parseInt(up.slice(0, 2), 16);
+      if (ALLOWED_SIDS.indexOf(sid) === -1) {
+        return {
+          allowed: false,
+          reason: 'Servicio 0x' + up.slice(0, 2) + ' bloqueado: la sonda es de solo lectura (permitidos: 01, 02, 03, 07, 09, 1A, 21, 22, 3E, 81, 82).',
+        };
+      }
+      return { allowed: true, normalized: up };
+    }
+    return { allowed: false, reason: 'No es un comando AT ni un mensaje hex válido.' };
+  }
+
+  const api = {
+    SPP_UUID,
+    sleep,
+    splitLines,
+    parseHexLine,
+    parseBd,
+    parseKw,
+    hex,
+    ElmClient,
+    checkAdapter,
+    probeEcu,
+    summarize,
+    STRATEGIES,
+    checkConsoleCommand,
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.SondaCore = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+(function () {
+  'use strict';
+  var C = window.SondaCore;
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { port: null, reader: null, writer: null, elm: null, listeners: [], busy: false, connected: false,
+    closing: false, stop: false, wakeLock: null, report: { creado: new Date().toISOString() } };
+  var t0 = performance.now();
+  var logLines = [];
+
+  // ---------------- Registro ----------------
+  function log(dir, text) {
+    var ts = ((performance.now() - t0) / 1000).toFixed(2);
+    while (ts.length < 8) ts = ' ' + ts;
+    var arrow = dir === 'tx' ? '→' : dir === 'rx' ? '←' : '·';
+    var line = ts + 's ' + arrow + ' ' + text;
+    logLines.push(line);
+    var pre = $('log');
+    var nearBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 40;
+    pre.appendChild(document.createTextNode(line + '\n'));
+    if (nearBottom) pre.scrollTop = pre.scrollHeight;
+  }
+
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { t.classList.remove('show'); }, 2200);
+  }
+
+  function buildReport() {
+    return [
+      'SentraDiag Sonda v0.1',
+      'Fecha: ' + new Date().toLocaleString('es-CO'),
+      'Navegador: ' + navigator.userAgent,
+      '',
+      '=== RESUMEN (JSON) ===',
+      JSON.stringify(state.report, null, 2),
+      '',
+      '=== REGISTRO ===',
+    ].concat(logLines).join('\n');
+  }
+
+  // ---------------- Estado de la UI ----------------
+  function refresh() {
+    var c = state.connected, b = state.busy;
+    $('btnConnect').hidden = c;
+    $('btnConnect').disabled = b;
+    $('btnDisconnect').hidden = !c;
+    $('btnDisconnect').disabled = b;
+    $('btnAdapter').disabled = !c || b;
+    $('btnEcu').disabled = !c || b;
+    $('btnSend').disabled = !c || b;
+    Array.prototype.forEach.call(document.querySelectorAll('#quick button'), function (x) { x.disabled = !c || b; });
+    var chip = $('chip');
+    chip.className = 'chip' + (b ? ' busy' : c ? ' on' : '');
+    chip.textContent = b ? 'Trabajando…' : c ? 'Conectado' : 'Desconectado';
+  }
+  function setBusy(v) { state.busy = v; refresh(); }
+  function setConnected(v) { state.connected = v; refresh(); }
+
+  var ICONS = { running: '…', ok: '✓', fail: '✗', warn: '!', info: 'i', pending: '·' };
+  function renderStep(listId, s) {
+    var list = $(listId);
+    var li = null;
+    Array.prototype.forEach.call(list.children, function (x) { if (x.dataset.key === s.key) li = x; });
+    if (!li) {
+      li = document.createElement('li');
+      li.dataset.key = s.key;
+      var icon = document.createElement('span'); icon.className = 'icon'; icon.setAttribute('aria-hidden', 'true');
+      var box = document.createElement('div');
+      var label = document.createElement('div'); label.className = 'label';
+      var detail = document.createElement('div'); detail.className = 'detail';
+      box.appendChild(label); box.appendChild(detail);
+      li.appendChild(icon); li.appendChild(box);
+      list.appendChild(li);
+    }
+    li.className = 'st-' + s.state;
+    li.querySelector('.icon').textContent = ICONS[s.state] || '·';
+    li.querySelector('.label').textContent = s.label;
+    li.querySelector('.detail').textContent = s.state === 'running' ? 'Probando…' : (s.detail || '');
+  }
+
+  // ---------------- Soporte del navegador ----------------
+  function supportProblem() {
+    if (!window.isSecureContext) {
+      return 'La página debe abrirse desde una dirección https:// (o localhost). Abierta como archivo en el teléfono, Chrome no permite el puerto serie.';
+    }
+    if (!('serial' in navigator)) {
+      return 'Este navegador no tiene Web Serial. En Android usa Chrome 137 o superior (no Samsung Internet, Firefox ni navegadores dentro de otras apps). En la laptop usa Chrome o Edge.';
+    }
+    return null;
+  }
+
+  // ---------------- Transporte Web Serial ----------------
+  var transport = {
+    write: function (bytes) {
+      if (!state.writer) return Promise.reject(new Error('No conectado'));
+      return state.writer.write(bytes);
+    },
+    onData: function (cb) { state.listeners.push(cb); },
+  };
+
+  async function readLoop(port) {
+    try {
+      while (port.readable && state.port === port) {
+        var reader = port.readable.getReader();
+        state.reader = reader;
+        try {
+          for (;;) {
+            var r = await reader.read();
+            if (r.done) break;
+            if (r.value && r.value.length) state.listeners.forEach(function (f) { f(r.value); });
+          }
+        } finally {
+          reader.releaseLock();
+        }
+        if (state.closing) break;
+      }
+    } catch (e) {
+      log('info', 'Se perdió la conexión: ' + ((e && e.message) || e));
+    }
+    if (state.port === port && !state.closing) {
+      await safeClose();
+      $('connMsg').textContent = 'Se perdió la conexión con el adaptador. Vuelve a conectar.';
+    }
+  }
+
+  async function safeClose() {
+    state.closing = true;
+    try { if (state.reader) await state.reader.cancel(); } catch (e) { /* ya cerrado */ }
+    try { if (state.writer) state.writer.releaseLock(); } catch (e) { /* ya liberado */ }
+    try { if (state.port) await state.port.close(); } catch (e) { /* ya cerrado */ }
+    state.port = null; state.reader = null; state.writer = null; state.elm = null; state.listeners = [];
+    state.closing = false;
+    releaseWakeLock();
+    setConnected(false);
+  }
+
+  async function connect(useLast) {
+    var problem = supportProblem();
+    if (problem) { showUnsupported(problem); return; }
+    setBusy(true);
+    try {
+      var port;
+      if (useLast) {
+        var ports = await navigator.serial.getPorts();
+        port = ports[ports.length - 1];
+        if (!port) { $('connMsg').textContent = 'No hay un adaptador guardado; usa "Conectar".'; return; }
+      } else {
+        port = await navigator.serial.requestPort({ allowedBluetoothServiceClassIds: [C.SPP_UUID] });
+      }
+      $('connMsg').textContent = 'Abriendo conexión…';
+      await port.open({ baudRate: Number($('baud').value) || 38400 });
+      state.port = port;
+      state.writer = port.writable.getWriter();
+      state.listeners = [];
+      state.elm = new C.ElmClient(transport, log);
+      readLoop(port);
+      var info = port.getInfo ? port.getInfo() : {};
+      log('info', 'Conectado ' + JSON.stringify(info));
+      state.report.puerto = info;
+      setConnected(true);
+      $('connMsg').textContent = 'Conectado. Sigue con el paso 2.';
+      $('btnReconnect').hidden = true;
+      requestWakeLock();
+    } catch (e) {
+      if (e && e.name === 'NotFoundError') {
+        $('connMsg').textContent = 'No se eligió ningún dispositivo. Si "OBDII" no aparece en la lista, emparéjalo primero en los ajustes de Bluetooth del teléfono.';
+      } else {
+        $('connMsg').textContent = 'No se pudo conectar: ' + ((e && e.message) || e) + '. Revisa que el adaptador esté conectado al carro y que ninguna otra app lo esté usando.';
+        log('info', 'Error al conectar: ' + ((e && e.name) || '') + ' ' + ((e && e.message) || e));
+      }
+      await safeClose();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function requestWakeLock() {
+    try { if ('wakeLock' in navigator) state.wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { /* opcional */ }
+  }
+  function releaseWakeLock() {
+    try { if (state.wakeLock) state.wakeLock.release(); } catch (e) { /* opcional */ }
+    state.wakeLock = null;
+  }
+
+  function showUnsupported(msg) {
+    $('unsupported').hidden = false;
+    $('unsupportedMsg').textContent = msg;
+  }
+
+  // ---------------- Paso 2: adaptador ----------------
+  var ADAPTER_MSG = {
+    'apto': ['ok', 'Adaptador apto para Consult-II. Sigue con el paso 3.'],
+    'clon-limitado': ['fail', 'Clon limitado: responde sin implementar los comandos. No sirve para Consult-II (solo como voltímetro).'],
+    'dudoso': ['warn', 'Resultado dudoso: le falta algún comando importante. Puedes intentar el paso 3, pero guarda el registro.'],
+    'sin-respuesta': ['fail', 'El adaptador no responde. Desconecta, revisa que tenga energía y vuelve a conectar.'],
+  };
+
+  async function runAdapter() {
+    if (!state.elm || state.busy) return;
+    setBusy(true);
+    $('adapterSteps').textContent = '';
+    $('adapterVerdict').hidden = true;
+    log('info', '=== Verificación del adaptador ===');
+    try {
+      var r = await C.checkAdapter(state.elm, function (s) { renderStep('adapterSteps', s); });
+      state.report.adaptador = { veredicto: r.verdict, version: r.version, voltios: r.volts, pasos: r.steps };
+      var m = ADAPTER_MSG[r.verdict] || ['warn', r.verdict];
+      var v = $('adapterVerdict');
+      v.className = 'note note-' + m[0];
+      v.textContent = m[1];
+      v.hidden = false;
+      log('info', 'Veredicto del adaptador: ' + r.verdict);
+    } catch (e) {
+      log('info', 'Error: ' + ((e && e.message) || e));
+      toast('Error: ' + ((e && e.message) || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ---------------- Paso 3: ECU ----------------
+  var VERDICT_CLASS = { 'consult2-kwp': 'v-ok', 'consult2-1byte': 'v-ok', 'consult2-probable': 'v-warn', 'obd2': 'v-ok',
+    'respuesta-parcial': 'v-warn', 'sin-respuesta': 'v-fail' };
+
+  async function runEcu() {
+    if (!state.elm || state.busy) return;
+    if (!$('ignOn').checked || !$('stopped').checked) {
+      $('ecuMsg').textContent = 'Confirma las dos primeras casillas antes de buscar la ECU.';
+      return;
+    }
+    $('ecuMsg').textContent = 'Puede tardar hasta un minuto si prueba todas las formas.';
+    setBusy(true);
+    state.stop = false;
+    $('btnStop').hidden = false;
+    $('btnStop').disabled = false;
+    $('verdictCard').hidden = true;
+    $('ecuSteps').textContent = '';
+    C.STRATEGIES.forEach(function (s) { renderStep('ecuSteps', { key: s.id, label: s.label, state: 'pending', detail: 'En espera' }); });
+    log('info', '=== Búsqueda de la ECU ===');
+    try {
+      var r = await C.probeEcu(state.elm, {
+        runAll: $('runAll').checked,
+        onStep: function (s) { renderStep('ecuSteps', s); },
+        shouldStop: function () { return state.stop; },
+      });
+      state.report.ecu = r;
+      C.STRATEGIES.forEach(function (s) {
+        var done = r.results.some(function (x) { return x.id === s.id; });
+        if (!done) renderStep('ecuSteps', { key: s.id, label: s.label, state: 'info', detail: state.stop ? 'Detenido' : 'No hizo falta probarla' });
+      });
+      var card = $('verdictCard');
+      card.className = 'card verdict ' + (VERDICT_CLASS[r.verdict.code] || '');
+      $('verdictTitle').textContent = r.verdict.title;
+      $('verdictBody').textContent = r.verdict.body;
+      card.hidden = false;
+      $('ecuMsg').textContent = '';
+      log('info', 'Veredicto: ' + r.verdict.code + ' — ' + r.verdict.title);
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (e) {
+      log('info', 'Error: ' + ((e && e.message) || e));
+      $('ecuMsg').textContent = 'Error: ' + ((e && e.message) || e);
+    } finally {
+      $('btnStop').hidden = true;
+      setBusy(false);
+    }
+  }
+
+  // ---------------- Consola ----------------
+  async function sendConsole(cmd) {
+    if (!state.elm || state.busy) return;
+    var chk = C.checkConsoleCommand(cmd);
+    var msg = $('consoleMsg');
+    if (!chk.allowed) {
+      msg.style.color = 'var(--warn)';
+      msg.textContent = chk.reason;
+      log('info', 'Bloqueado: ' + cmd + ' — ' + chk.reason);
+      return;
+    }
+    msg.textContent = '';
+    setBusy(true);
+    try {
+      var n = chk.normalized;
+      var timeout = /^AT(Z|FI|SI)/.test(n) ? 12000 : /^[0-9A-F]+$/.test(n) ? 20000 : 3000;
+      var r = await state.elm.command(n, timeout);
+      msg.style.color = 'var(--muted)';
+      msg.textContent = n + ' → ' + (r.lines.join(' | ') || (r.timeout ? '(sin respuesta)' : '(vacío)'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ---------------- Eventos ----------------
+  $('btnConnect').addEventListener('click', function () { connect(false); });
+  $('btnReconnect').addEventListener('click', function () { connect(true); });
+  $('btnDisconnect').addEventListener('click', async function () {
+    setBusy(true);
+    await safeClose();
+    setBusy(false);
+    $('connMsg').textContent = 'Desconectado.';
+    log('info', 'Desconectado por el usuario');
+  });
+  $('btnAdapter').addEventListener('click', runAdapter);
+  $('btnEcu').addEventListener('click', runEcu);
+  $('btnStop').addEventListener('click', function () {
+    state.stop = true;
+    $('btnStop').disabled = true;
+    $('ecuMsg').textContent = 'Se detendrá al terminar el intento actual…';
+  });
+  $('consoleForm').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var v = $('consoleInput').value;
+    sendConsole(v).then(function () { $('consoleInput').value = ''; });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('#quick button'), function (b) {
+    b.addEventListener('click', function () { sendConsole(b.dataset.cmd); });
+  });
+  $('btnDownload').addEventListener('click', function () {
+    var blob = new Blob([buildReport()], { type: 'text/plain;charset=utf-8' });
+    var a = document.createElement('a');
+    var d = new Date();
+    var stamp = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') +
+      '_' + String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sonda-sentradiag_' + stamp + '.txt';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  });
+  $('btnCopy').addEventListener('click', function () {
+    if (!navigator.clipboard) { toast('No se pudo copiar; usa Descargar'); return; }
+    navigator.clipboard.writeText(buildReport()).then(function () { toast('Registro copiado'); }, function () { toast('No se pudo copiar; usa Descargar'); });
+  });
+  $('btnClear').addEventListener('click', function () { logLines.length = 0; $('log').textContent = ''; });
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && state.connected) requestWakeLock();
+  });
+
+  // ---------------- Inicio ----------------
+  var problem = supportProblem();
+  if (problem) {
+    showUnsupported(problem);
+    $('btnConnect').disabled = true;
+  } else {
+    navigator.serial.getPorts().then(function (ports) { if (ports.length && !state.connected) $('btnReconnect').hidden = false; }, function () {});
+  }
+  refresh();
+  if (problem) $('btnConnect').disabled = true;
+  log('info', 'Sonda lista. ' + (problem ? 'Problema: ' + problem : 'Web Serial disponible.'));
+  window.__sonda = { state: state, buildReport: buildReport };
+})();
+</script>
+</body>
+</html>
